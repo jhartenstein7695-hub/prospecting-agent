@@ -2375,6 +2375,7 @@ function renderAgentData() {
 
 function renderTabContent() {
   const d = agentData;
+  if (!d) return '<div style="padding:20px;text-align:center;color:var(--muted);font-size:14px;">Run research first to generate outreach.</div>';
   if (activeTab === 'email') {
     const foundEmail = agentData.foundEmail || '';
     const emailStatus = agentData.emailStatus || '';
@@ -2436,10 +2437,10 @@ function renderTabContent() {
     return `
       <div class="email-field text-field">
         <label>Text Message (under 30 words)</label>
-        <textarea id="textBody">${d.text}</textarea>
+        <textarea id="textBody">${d.text || ''}</textarea>
       </div>
       <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:6px;" id="wordCount">
-        ${d.text.split(' ').length} words
+        ${(d.text || '').split(' ').filter(w=>w.trim()).length} words
       </div>
     `;
   }
