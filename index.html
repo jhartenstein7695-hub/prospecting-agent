@@ -1029,6 +1029,15 @@
       </button>
 
       <div id="openingsResults" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);" id="competitorScannerSection">
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Platform Competitor Scanner</div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);padding-bottom:10px;line-height:1.6;">Find all restaurants in a city using Toast Tables or Tock.</div>
+        <select id="compScanMarket" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-sans);font-size:13px;outline:none;margin-bottom:10px;"><optgroup label="Michigan"><option value="Grand Rapids, MI">Grand Rapids, MI</option><option value="Traverse City, MI">Traverse City, MI</option><option value="Holland, MI">Holland, MI</option><option value="Kalamazoo, MI">Kalamazoo, MI</option><option value="Saugatuck, MI">Saugatuck, MI</option><option value="East Lansing, MI">East Lansing, MI</option></optgroup><optgroup label="Wisconsin"><option value="Green Bay, WI">Green Bay, WI</option><option value="Appleton, WI">Appleton, WI</option><option value="La Crosse, WI">La Crosse, WI</option><option value="Lake Geneva, WI">Lake Geneva, WI</option><option value="Wausau, WI">Wausau, WI</option></optgroup><optgroup label="Illinois"><option value="Peoria, IL">Peoria, IL</option><option value="Rockford, IL">Rockford, IL</option><option value="Springfield, IL">Springfield, IL</option><option value="Champaign, IL">Champaign, IL</option></optgroup><optgroup label="Iowa"><option value="Des Moines, IA">Des Moines, IA</option><option value="Davenport, IA">Davenport, IA</option><option value="Iowa City, IA">Iowa City, IA</option></optgroup><optgroup label="Minnesota"><option value="Duluth, MN">Duluth, MN</option><option value="Mankato, MN">Mankato, MN</option></optgroup></select>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"><label style="display:flex;align-items:center;gap:8px;font-size:12px;font-family:var(--font-mono);color:var(--text);cursor:pointer;"><input type="checkbox" id="scanToast" checked style="accent-color:var(--gazpacho);"><span style="color:var(--gazpacho);">Toast Tables</span></label><label style="display:flex;align-items:center;gap:8px;font-size:12px;font-family:var(--font-mono);color:var(--text);cursor:pointer;"><input type="checkbox" id="scanTock" checked style="accent-color:var(--curacao);"><span style="color:var(--curacao);">Tock</span></label></div>
+        <button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="scanCompetitorPlatforms()">Scan Competitor Platforms</button>
+        <div id="competitorResults" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
     </div>
   </div>
 
@@ -2983,6 +2992,13 @@ async function runResearch() {
     </div>`;
 
   try {
+        if (p.website && !p.competitor) {
+      const btn2 = document.getElementById('researchBtn');
+      if (btn2) btn2.innerHTML = '<span class="spinner">⟳</span> Detecting platform...';
+      const detected = await detectPlatform(p.website);
+      if (detected) { p.competitor = detected; selectedProspect.competitor = detected; }
+      if (btn2) btn2.innerHTML = '<span class="spinner">⟳</span> Researching...';
+    }
     const result = await fetchResearchData(p);
   const stripEmDash = s => typeof s === 'string' ? s.replace(/\u2014/g, ',').replace(/\s,/g, ',') : s;
   agentData = result;
@@ -3428,6 +3444,21 @@ async function sbFetch(targetUrl, options = {}) {
   }
 }
 
+
+async function detectPlatform(websiteUrl) {
+  if (!websiteUrl) return null;
+  try {
+    const html = await sbFetch(websiteUrl, { renderJs: false });
+    if (!html) return null;
+    const lower = html.toLowerCase();
+    if (lower.includes('opentable.com/r/') || lower.includes('opentable.com/widget') || lower.includes('opentable.com/book') || lower.includes('opentable.com/restref')) return 'OpenTable';
+    if (lower.includes('toasttab.com')) return 'Toast';
+    if (lower.includes('exploretock.com') || lower.includes('tock.com/')) return 'Tock';
+    if (lower.includes('resy.com')) return 'Resy';
+    return null;
+  } catch(e) { return null; }
+}
+
 // ── NEW OPENINGS SCANNER ──
 async function scanNewOpenings() {
   const apiKey = getSbKey();
@@ -3703,6 +3734,54 @@ function loadOpeningAsProspect(idx) {
   notice.textContent = `${l.name} loaded as new prospect. Hit Research to build outreach.`;
   document.body.appendChild(notice);
   setTimeout(() => notice.remove(), 3500);
+}
+
+
+async function scanCompetitorPlatforms(){
+  const mk=document.getElementById('compScanMarket').value;
+  const mi=TARGET_MARKETS[mk]||{city:mk.split(',')[0]?.trim(),state:mk.split(',')[1]?.trim(),zips:[]};
+  const city=mi.city,state=mi.state,label=city+', '+state;
+  const toast=document.getElementById('scanToast').checked,tock=document.getElementById('scanTock').checked;
+  if(!toast&&!tock){alert('Select at least one platform.');return;}
+  const el=document.getElementById('competitorResults');
+  el.innerHTML='<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);padding:8px 0;">Scanning '+label+'...</div>';
+  const plats=[];
+  if(toast)plats.push({name:'Toast',domain:'toasttab.com'});
+  if(tock)plats.push({name:'Tock',domain:'exploretock.com'});
+  const searches=plats.map(p=>'site:'+p.domain+' \"'+city+'\"').join(' AND ');
+  const prompt='Find ALL restaurants physically in '+label+' listed on these platforms. Search: '+searches+'. Clean up URL slugs into readable restaurant names. Return JSON: [{"name":"Name","platform":"Toast or Tock","url":"https://...","address":"location"}]. Exclude chains 20+ locations. If none: []';
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})});
+    const d=await r.json();
+    if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
+    let js='';
+    for(const b of d.content){if(b.type==='text')js=b.text;}
+    js=js.replace(/```json/g,'').replace(/```/g,'').trim();
+    const a=js.indexOf('['),z=js.lastIndexOf(']');
+    const leads=JSON.parse(a!==-1&&z!==-1?js.slice(a,z+1):'[]');
+    window._competitorLeads=leads;window._competitorMarketKey=mk;
+    renderCompetitorResults(leads,label);
+  }catch(e){el.innerHTML='<div style="color:var(--accent3);font-size:12px;font-family:var(--font-mono);padding:8px 0;">Scan failed: '+e.message+'</div>';}
+}
+function renderCompetitorResults(leads,label){
+  const el=document.getElementById('competitorResults');
+  if(!leads||!leads.length){el.innerHTML='<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);padding:8px 0;">No results in '+label+'.</div>';return;}
+  const pc={'Toast':'var(--gazpacho)','Tock':'var(--curacao)'};
+  const byP={};
+  leads.forEach(l=>{const k=l.platform||'?';if(!byP[k])byP[k]=[];byP[k].push(l);});
+  el.innerHTML='<div style="font-size:10px;font-family:var(--font-mono);color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">'+leads.length+' restaurants on competitor platforms in '+label+'</div>'+Object.entries(byP).map(([pl,items])=>'<div style="margin-bottom:10px;"><div style="font-size:10px;font-family:var(--font-mono);color:'+(pc[pl]||'var(--text)')+';text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;padding:2px 7px;background:rgba(0,0,0,0.3);border-radius:4px;display:inline-block;">'+pl+' ('+items.length+')</div>'+items.map(l=>'<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid '+(pc[pl]||'var(--border)')+';border-radius:7px;padding:9px;margin-bottom:4px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div><div style="font-size:13px;font-weight:600;color:var(--text);">'+l.name+'</div>'+(l.address?'<div style="font-size:11px;font-family:var(--font-mono);color:var(--muted);">'+l.address+'</div>':'')+'</div><div style="display:flex;gap:4px;flex-shrink:0;">'+(l.url?'<a href="'+l.url+'" target="_blank" style="font-size:10px;font-family:var(--font-mono);color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:2px 6px;text-decoration:none;">&#x2197;</a>':'')+'<button onclick="loadCompetitorAsProspect('+leads.indexOf(l)+')" style="font-size:10px;font-family:var(--font-mono);color:var(--gazpacho);background:rgba(236,4,61,0.08);border:1px solid rgba(236,4,61,0.3);border-radius:4px;padding:2px 6px;cursor:pointer;">+ Prospect</button></div></div>').join('')+'</div>').join('');
+}
+function loadCompetitorAsProspect(idx){
+  const leads=window._competitorLeads,mk=window._competitorMarketKey||'';
+  const mi=TARGET_MARKETS[mk]||{};
+  if(!leads||!leads[idx])return;
+  const l=leads[idx];
+  PROSPECTS.unshift({name:l.name,city:mi.city||mk.split(',')[0]?.trim()||'',state:mi.state||mk.split(',')[1]?.trim()||'',metro:'',competitor:l.platform||'Unknown',website:l.url||null,address:l.address||'',_isCompetitorLead:true});
+  selectProspect(0);switchLeftTab('prospects');
+  const n=document.createElement('div');
+  n.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--gazpacho);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:10px 18px;border-radius:8px;z-index:9999;';
+  n.textContent=l.name+' loaded as '+l.platform+' displacement target.';
+  document.body.appendChild(n);setTimeout(()=>n.remove(),3500);
 }
 
 // ── GMAIL SEND ──
