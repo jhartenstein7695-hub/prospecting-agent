@@ -2375,7 +2375,6 @@ function renderAgentData() {
 
 function renderTabContent() {
   const d = agentData;
-  if (!d) return '<div style="padding:20px;text-align:center;color:var(--muted);font-size:14px;">Run research first to generate outreach.</div>';
   if (activeTab === 'email') {
     const foundEmail = agentData.foundEmail || '';
     const emailStatus = agentData.emailStatus || '';
@@ -2437,10 +2436,10 @@ function renderTabContent() {
     return `
       <div class="email-field text-field">
         <label>Text Message (under 30 words)</label>
-        <textarea id="textBody">${d.text || ''}</textarea>
+        <textarea id="textBody">${d.text}</textarea>
       </div>
       <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:6px;" id="wordCount">
-        ${(d.text || '').split(' ').filter(w=>w.trim()).length} words
+        ${d.text.split(' ').length} words
       </div>
     `;
   }
@@ -3552,7 +3551,7 @@ async function scanNewOpenings() {
 
   if (useLocal) {
     setStatus('Fetching local press...');
-    const newsUrl = `https://news.google.com/search?q=${encodeURIComponent(`new restaurant opening ${cityClean} 2025 2026`)}&hl=en-US&gl=US&ceid=US:en`;
+    const newsUrl = `https://news.google.com/search?q=${encodeURIComponent(`new restaurant opening ${cityClean} ${stateClean} 2025 2026`)}&hl=en-US&gl=US&ceid=US:en`;
     const newsHtml = await sbFetch(newsUrl, { renderJs: false });
     if (newsHtml) {
       const newsText = newsHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000);
@@ -3592,6 +3591,7 @@ SEARCH 4: site:patch.com OR site:mlive.com OR site:jsonline.com OR site:desmoine
 TARGET TERRITORY: ${marketLabel}
 Target zip codes: ${zipList}
 Results must be physically located within these zip codes or the immediate surrounding area only.
+STRICT STATE FILTER: "${cityClean}" means ${cityClean}, ${stateClean} ONLY. If "${cityClean}" appears in multiple states (e.g. Springfield IL vs Springfield MO), ONLY return results in ${stateClean}. Discard any result from a different state.
 
 IDEAL CUSTOMER PROFILE — only these qualify:
 - Takes reservations or uses a waitlist
