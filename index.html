@@ -864,6 +864,7 @@
         <button class="chip toast" data-filter="Toast" onclick="setFilter('Toast', this)">Toast</button>
         <button class="chip pen" data-filter="Pen & Paper" onclick="setFilter('Pen & Paper', this)">Pen & Paper</button>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-bottom:6px;border-top:1px solid var(--border);padding-top:6px;"><span style="font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;flex-shrink:0;">Sort</span><select id="sortSelect" onchange="setSort(this.value)" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-family:var(--font-mono);font-size:11px;outline:none;cursor:pointer;"><option value="default">Default order</option><option value="metro_comp">Metro then Competitor</option><option value="comp_metro">Competitor then Metro</option><option value="city">City A-Z</option></select></div>
       <div class="count-tag" id="countTag">Loading...</div>
       <div class="prospect-list" id="prospectList"></div>
     </div>
@@ -2013,6 +2014,7 @@ function refreshCprButton() {
 
 // ── STATE ──
 let currentFilter = 'all';
+let currentSort = 'default';
 let currentSearch = '';
 let currentCity = 'all';
 let currentMetro = 'all';
@@ -2109,7 +2111,7 @@ function populateCityDropdown() {
 }
 
 function renderList() {
-  const filtered = getFilteredProspects();
+  const _raw = getFilteredProspects(); const filtered = sortProspects(_raw);
   document.getElementById('countTag').textContent = `${filtered.length} prospects`;
   const list = document.getElementById('prospectList');
   const savedScroll = list.scrollTop;
@@ -2144,6 +2146,28 @@ function setFilter(val, el) {
   renderList();
 }
 
+function setSort(val) { currentSort = val; renderList(); }
+const COMP_ORDER = {"Resy":0,"Tock":1,"Toast":2,"Pen & Paper":3,"P&P":3};
+function compRank(p) { if(!p.competitor) return 4; for(const [k,v] of Object.entries(COMP_ORDER)){if(p.competitor.includes(k))return v;} return 4; }
+function sortProspects(arr) {
+  if(currentSort==="default") return arr;
+  return [...arr].sort((a,b)=>{
+    if(currentSort==="metro_comp"){
+      const ma=(a.metro||"").toLowerCase(),mb=(b.metro||"").toLowerCase();
+      if(ma!==mb) return ma<mb?-1:1;
+      const cr=compRank(a)-compRank(b); if(cr!==0) return cr;
+      return (a.city||"").toLowerCase()<(b.city||"").toLowerCase()?-1:1;
+    }
+    if(currentSort==="comp_metro"){
+      const cr=compRank(a)-compRank(b); if(cr!==0) return cr;
+      const ma=(a.metro||"").toLowerCase(),mb=(b.metro||"").toLowerCase();
+      if(ma!==mb) return ma<mb?-1:1;
+      return (a.city||"").toLowerCase()<(b.city||"").toLowerCase()?-1:1;
+    }
+    if(currentSort==="city") return (a.city||"").toLowerCase()<(b.city||"").toLowerCase()?-1:1;
+    return 0;
+  });
+}
 function filterProspects() {
   currentSearch = document.getElementById('searchInput').value;
   renderList();
