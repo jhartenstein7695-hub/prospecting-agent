@@ -894,6 +894,13 @@
         Scan your territory for new restaurant openings, new liquor license applications, and recent openings not yet in your prospect list.
       </div>
 
+      <!-- Anthropic API Key -->
+      <div style="margin-bottom:10px;">
+        <label style="font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">Anthropic API Key</label>
+        <input type="password" id="anthropicApiKey" placeholder="sk-ant-..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none;" oninput="saveAnthropicKey(this.value)">
+        <div style="font-size:10px;color:var(--muted);font-family:var(--font-mono);margin-top:4px;">Required for all AI features. Saved in your browser.</div>
+      </div>
+
       <!-- ScrapingBee API Key -->
       <div style="margin-bottom:10px;">
         <label style="font-size:10px;font-family:var(--font-mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">ScrapingBee API Key</label>
@@ -1237,6 +1244,10 @@ function switchLeftTab(tab) {
       } catch(e) {
         keyField.value = 'IS5JCA6CH7UXWHE0DA4HZLDQLWF8HVK3OZ8MEN3GXNNV3TQNH3GOM0RG8TFL8YGDN76HDF2YBNMGRNN3';
       }
+    }
+    const anthField = document.getElementById('anthropicApiKey');
+    if (anthField && !anthField.value) {
+      try { anthField.value = localStorage.getItem('anthropic_api_key') || ''; } catch(e) {}
     }
   }
 }
@@ -3357,11 +3368,35 @@ const TARGET_MARKETS = {
   "Wisconsin Dells, WI":  { city: "Wisconsin Dells", state: "WI", zips: ["53940","53965"] },
 };
 
+// ── ANTHROPIC KEY ──
+function saveAnthropicKey(val) {
+  try { localStorage.setItem('anthropic_api_key', val); } catch(e) {}
+}
+function getAnthropicKey() {
+  const fieldVal = document.getElementById('anthropicApiKey')?.value?.trim();
+  if (fieldVal) return fieldVal;
+  try { return localStorage.getItem('anthropic_api_key') || ''; } catch(e) {}
+  return '';
+}
+(function() {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = function(url, options) {
+    if (typeof url === 'string' && url.includes('api.anthropic.com')) {
+      options = options || {};
+      options.headers = Object.assign({}, options.headers || {}, {
+        'x-api-key': getAnthropicKey(),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      });
+    }
+    return _origFetch(url, options);
+  };
+})();
+
 // ── SCRAPINGBEE KEY ──
 function saveSbKey(val) {
   try { localStorage.setItem('sb_api_key', val); } catch(e) {}
 }
-
 function getSbKey() {
   const fieldVal = document.getElementById('sbApiKey')?.value?.trim();
   if (fieldVal) return fieldVal;
