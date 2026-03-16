@@ -3745,23 +3745,59 @@ async function scanCompetitorPlatforms(){
   if(!toast&&!tock){alert('Select at least one platform.');return;}
   const el=document.getElementById('competitorResults');
   el.innerHTML='<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);padding:8px 0;">Scanning '+label+'...</div>';
-  const plats=[];
-  if(toast)plats.push({name:'Toast',domain:'toasttab.com'});
-  if(tock)plats.push({name:'Tock',domain:'exploretock.com'});
-  const searches=plats.map(p=>'site:'+p.domain+' \"'+city+'\"').join(' AND ');
-  const prompt='Find ALL restaurants physically in '+label+' listed on these platforms. Search: '+searches+'. Clean up URL slugs into readable restaurant names. Return JSON: [{"name":"Name","platform":"Toast or Tock","url":"https://...","address":"location"}]. Exclude chains 20+ locations. If none: []';
-  try{
+
+  // Build platform-specific search instructions
+  const toastSearch = toast ? `TOAST TABLES SEARCHES (reservations only — NOT Toast POS ordering pages):
+- site:toasttab.com "${city}" "reserve"
+- site:toasttab.com "${city}" "reservation"
+- "${city}" "${state}" "toast tables" reservations
+- "${city}" "${state}" site:toasttab.com "book a table"
+NOTE: Toast Tables is Toast's RESERVATION product. Many restaurants use Toast POS for online ordering only — those are NOT Toast Tables and should be EXCLUDED. A Toast Tables restaurant will have a "Reserve a Table" or "Book" option on their toasttab.com page, not just an "Order Now" menu. If a toasttab.com page only shows ordering (no reservation capability), exclude it.` : '';
+
+  const tockSearch = tock ? `TOCK SEARCHES:
+- site:exploretock.com "${city}"
+- site:exploretock.com "${city}" "${state}"` : '';
+
+  const prompt = `You are a competitive intelligence analyst for an OpenTable sales rep in ${label}.
+
+CRITICAL DISTINCTION FOR TOAST:
+Toast has two separate products:
+1. Toast POS — payment/ordering system used by almost every type of restaurant. These show up on toasttab.com as online ordering pages. DO NOT include these.
+2. Toast TABLES — their reservation/booking product. Only restaurants with actual TABLE RESERVATION capability should be included. These pages have a "Reserve" or "Book a Table" function. Online-ordering-only pages do NOT qualify.
+
+Run these searches:
+${toastSearch}
+${tockSearch}
+
+For each result found, verify it's the correct product:
+- Toast: only include if the toasttab.com page has reservation/booking functionality (not just online ordering)
+- Tock: any exploretock.com listing qualifies
+
+Return ONLY valid JSON:
+[{"name":"Restaurant Name","platform":"Toast","url":"https://www.toasttab.com/...","address":"neighborhood or address","note":"brief evidence it has reservations"}]
+
+Only restaurants physically in ${city}, ${state}. Exclude chains with 20+ locations. If none found after searching: []`;
+
+  const callClaude = async (retry=0) => {
     const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:3000,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:prompt}]})});
     const d=await r.json();
+    if(d.error&&d.error.type==='exceeded_limit'&&retry<4){
+      el.innerHTML='<div style="color:var(--muted);font-size:12px;font-family:var(--font-mono);padding:8px 0;">API busy — retrying in '+((retry+1)*5)+'s... ('+(retry+1)+'/4)</div>';
+      await new Promise(r=>setTimeout(r,(retry+1)*5000));return callClaude(retry+1);
+    }
     if(d.error)throw new Error(d.error.message||JSON.stringify(d.error));
+    return d;
+  };
+  try{
+    const data=await callClaude();
     let js='';
-    for(const b of d.content){if(b.type==='text')js=b.text;}
+    for(const b of data.content){if(b.type==='text')js=b.text;}
     js=js.replace(/```json/g,'').replace(/```/g,'').trim();
     const a=js.indexOf('['),z=js.lastIndexOf(']');
     const leads=JSON.parse(a!==-1&&z!==-1?js.slice(a,z+1):'[]');
     window._competitorLeads=leads;window._competitorMarketKey=mk;
     renderCompetitorResults(leads,label);
-  }catch(e){el.innerHTML='<div style="color:var(--accent3);font-size:12px;font-family:var(--font-mono);padding:8px 0;">Scan failed: '+e.message+'</div>';}
+  }catch(e){el.innerHTML='<div style="color:var(--accent3);font-size:12px;font-family:var(--font-mono);padding:8px 0;">Scan failed: '+e.message+'<br><span style="color:var(--muted);font-size:11px;">Wait 15 seconds and try again — API concurrency limit.</span></div>';}
 }
 function renderCompetitorResults(leads,label){
   const el=document.getElementById('competitorResults');
